@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZINEBO (v3.5)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Noto+Serif+SC:wght@300;400;500;700;900&family=Roboto:wght@400;500;700;900&family=Playfair+Display:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- 基础变量 --- */
+        :root {
+            --bg-main: #1e272e;
+            --panel-bg: #2c3e50;
+            --card-bg: #34495e;
+            --input-bg: #22303f;
+            --accent: #669988; /* 灰绿主题 */
+            --text-white: #ecf0f1;
+            --text-gray: #bdc3c7;
+        }
+
+        body {
+            margin: 0; padding: 0; font-family: "Noto Sans SC", sans-serif;
+            background-color: var(--bg-main); height: 100vh; display: flex; overflow: hidden;
+        }
+
+        /* 左下角品牌水印 */
+        .brand-watermark {
+            position: fixed;
+            bottom: 20px;
+            left: 25px;
+            z-index: 5;
+            font-family: "Roboto", sans-serif;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.15);
+            letter-spacing: 1px;
+            pointer-events: none;
+            user-select: none;
+        }
+        .brand-watermark span {
+            font-weight: 900;
+            margin-right: 5px;
+            font-size: 12px;
+        }
+
+        /* --- 1. 左侧预览区 --- */
+        .preview-panel {
+            flex: 1; 
+            background-image: radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 20px 20px; background-color: var(--bg-main); 
+            display: flex; justify-content: center; align-items: flex-start; 
+            overflow: auto; padding: 40px; box-sizing: border-box;
+        }
+        
+        .preview-center-wrapper {
+            min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        }
+
+        /* --- 2. 右侧编辑区 --- */
+        .editor-panel {
+            width: 760px; 
+            background-color: var(--panel-bg); color: white;
+            padding: 30px 25px 0 25px; 
+            display: flex; flex-direction: column; height: 100vh;
+            box-sizing: border-box; box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+            z-index: 10; border-left: 1px solid rgba(255,255,255,0.05); 
+            overflow: hidden;
+        }
+
+        .app-version {
+            font-size: 12px; font-weight: 400; background: var(--input-bg); color: var(--text-gray);
+            padding: 4px 8px; border-radius: 4px; letter-spacing: 0; font-family: "Noto Sans SC", sans-serif; text-transform: none;
+        }
+
+        /* 文件夹式标签页 UI */
+        .editor-tabs {
+            display: flex;
+            gap: 6px; 
+            padding: 0 10px; 
+            margin-bottom: -1px; 
+            z-index: 20; 
+            flex-shrink: 0;
+        }
+
+        .editor-tab-btn {
+            flex: 1; text-align: center; padding: 12px 0; font-size: 13px; font-weight: 700;
+            color: var(--text-gray); 
+            background-color: rgba(0,0,0,0.2); 
+            cursor: pointer;
+            border-radius: 10px 10px 0 0; 
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255,255,255,0.05);
+            border-bottom: none;
+            position: relative;
+        }
+
+        .editor-tab-btn:hover { background-color: rgba(255,255,255,0.05); color: var(--text-white); }
+
+        .editor-tab-btn.active {
+            background-color: var(--card-bg); 
+            color: var(--accent);
+            transform: translateY(-2px); 
+            padding-bottom: 14px; 
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+            z-index: 22;
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        /* --- 卡片容器 --- */
+        .control-card {
+            background-color: var(--card-bg); border-radius: 12px; padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);
+            display: flex; flex-direction: column; gap: 15px;
+            flex: 1; margin-bottom: 25px; overflow-y: auto; 
+            display: none; z-index: 10; position: relative;
+        }
+        .control-card.active-card { display: flex; }
+
+        /* --- 移动端适配 --- */
+        @media (max-width: 1000px) {
+            body { flex-direction: column; }
+            .editor-panel { width: 100%; height: 100%; border-left: none; padding: 15px; padding-top: 20px; position: absolute; top: 0; left: 0; }
+            .preview-panel { display: none; } 
+            .brand-watermark { display: none; }
+            
+            #mobile-preview-container { 
+                display: flex; flex: 1; min-height: 400px; 
+                justify-content: center; align-items: flex-start; 
+                overflow-y: auto; overflow-x: hidden; background: #1a1a1a; 
+                border-radius: 8px; margin-bottom: 15px; padding: 20px 0;
+                -webkit-overflow-scrolling: touch;
+            }
+            .mobile-only-text { display: block; }
+        }
+        @media (min-width: 1001px) {
+            #mobile-preview-container { display: none; } 
+            .mobile-only-text { display: none; } 
+        }
+
+        /* iOS 保存弹窗 */
+        .save-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+        .save-modal.active { display: flex; }
+        .save-modal img { max-width: 90%; max-height: 80%; box-shadow: 0 0 30px rgba(0,0,0,0.5); border-radius: 8px; background: #fff; }
+        .save-modal-tip { color: white; margin-top: 20px; font-size: 16px; font-weight: bold; text-align: center; background: var(--accent); padding: 10px 20px; border-radius: 50px; }
+        .save-modal-close { position: absolute; top: 20px; right: 20px; color: white; font-size: 30px; cursor: pointer; background: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+        /* --- 控件样式 --- */
+        .input-group { display: flex; flex-direction: column; position: relative; }
+        label { font-size: 17px; font-weight: 700; margin-bottom: 8px; color: var(--text-gray); display: flex; justify-content: space-between; align-items: center; }
+        
+        .label-controls { display: flex; align-items: center; gap: 10px; }
+
+        .size-adjuster { display: flex; align-items: center; gap: 2px; background: rgba(0,0,0,0.2); padding: 2px; border-radius: 4px; }
+        .size-adjust-btn { cursor: pointer; color: var(--text-gray); width: 22px; text-align: center; font-size: 12px; font-weight: bold; user-select: none; border-radius: 2px; transition: 0.2s; }
+        .size-adjust-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        .size-adjust-btn:active { background: var(--accent); }
+
+        .tips-trigger { cursor: help; color: var(--accent); font-size: 12px; display: flex; align-items: center; gap: 4px; }
+        .tips-icon { display: inline-flex; justify-content: center; align-items: center; width: 14px; height: 14px; border: 1.5px solid var(--accent); border-radius: 50%; font-size: 10px; font-weight: bold; font-family: sans-serif; }
+        .markdown-tips-box { display: none; position: absolute; top: 25px; right: 0; background: rgba(0,0,0,0.95); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 8px; width: 180px; z-index: 100; box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-size: 11px; color: #bdc3c7; line-height: 1.8; pointer-events: none; }
+        .tips-trigger:hover + .markdown-tips-box { display: block; }
+        .markdown-tips-box code { background: rgba(255,255,255,0.15); padding: 2px 5px; border-radius: 3px; color: var(--accent); font-family: monospace; margin-right: 5px; }
+
+        input[type="text"], textarea { background: var(--input-bg); color: white; border: 1px solid transparent; padding: 12px; border-radius: 6px; font-size: 16px; outline: none; font-family: "Noto Sans SC"; transition: 0.2s; width: 100%; box-sizing: border-box; }
+        input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+        textarea { line-height: 1.6; flex: 1; resize: none; min-height: 200px; font-size: 19px; }
+        textarea.ts-small { font-size: 16px; } textarea.ts-medium { font-size: 19px; } textarea.ts-large { font-size: 22px; }
+
+        .flex-grow-input { display: flex; flex-direction: column; flex: 1; height: 100%; }
+        input[type="file"] { background: var(--input-bg); padding: 10px; border-radius: 6px; color: white; font-size: 12px; width: 100%; box-sizing: border-box; }
+        .row-group { display: flex; gap: 15px; } .row-group .input-group { flex: 1; }
+        .btn-group { margin-top: auto; flex-shrink: 0; }
+        button.btn-download { width: 100%; padding: 16px; border: none; border-radius: 8px; background-color: var(--accent); color: white; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        button.btn-download:disabled { background-color: #95a5a6; box-shadow: none; }
+        .reset-section { margin-top: 15px; display: flex; justify-content: center; }
+        .btn-reset-text { background: transparent; border: none; color: #e74c3c; font-size: 12px; cursor: pointer; padding: 8px 15px; border-radius: 4px; opacity: 0.6; transition: 0.2s; font-weight: bold; }
+        .btn-reset-text:hover { opacity: 1; background: rgba(231, 76, 60, 0.1); }
+
+        .radio-group { display: flex; gap: 8px; background: var(--input-bg); padding: 4px; border-radius: 6px; }
+        .radio-btn { flex: 1; padding: 8px 0; text-align: center; font-size: 12px; cursor: pointer; border-radius: 4px; color: var(--text-gray); transition: 0.2s; }
+        .radio-btn:hover { color: white; background: rgba(255,255,255,0.05); }
+        .radio-btn.active { background: var(--card-bg); color: white; border: 1px solid var(--text-gray); box-shadow: 0 2px 4px rgba(0,0,0,0.2); font-weight: bold; }
+        .color-options { display: flex; gap: 10px; }
+        .color-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: 0.2s; }
+        .color-btn.active { border-color: white; transform: scale(1.15); box-shadow: 0 0 0 2px var(--input-bg); }
+        .size-options { display: flex; gap: 15px; align-items: center; }
+        .size-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--input-bg); color: var(--text-gray); display: flex; justify-content: center; align-items: center; font-weight: 700; font-family: "Roboto"; cursor: pointer; transition: 0.2s; border: 2px solid transparent; }
+        .size-btn:hover { color: white; background: rgba(255,255,255,0.1); }
+        .size-btn.active { background: var(--accent); color: white; box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--accent); }
+        .size-btn[data-size="small"] { font-size: 12px; width: 30px; height: 30px; }
+        .size-btn[data-size="medium"] { font-size: 16px; width: 36px; height: 36px; }
+        .size-btn[data-size="large"] { font-size: 20px; width: 42px; height: 42px; }
+
+        /* --- 海报样式 --- */
+        .paper { 
+            width: 675px; min-width: 675px; flex-shrink: 0;
+            min-height: 1200px; height: auto; 
+            background: #fff; box-shadow: 0 20px 60px rgba(0,0,0,0.5); 
+            padding: 40px 45px 60px 45px; box-sizing: border-box; 
+            position: relative; transform-origin: top center; 
+            display: flex; flex-direction: column; 
+            margin-bottom: 20px; 
+        }
+        
+        .texture-line { background-image: repeating-linear-gradient(transparent, transparent 35px, rgba(0,0,0,0.06) 35px, rgba(0,0,0,0.06) 36px); }
+        .texture-grid { background-image: linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px); background-size: 15px 15px; }
+        
+        .font-sans .magazine-title, .font-sans .magazine-content, .font-sans .magazine-image-caption, .font-sans .magazine-subtitle { font-family: "Roboto", "Noto Sans SC", sans-serif; }
+        .font-serif .magazine-title, .font-serif .magazine-content, .font-serif .magazine-image-caption, .font-serif .magazine-subtitle { font-family: "Playfair Display", "Noto Serif SC", serif; }
+
+        .magazine-title { font-size: 44px; font-weight: 900; text-align: center; line-height: 1.2; margin-bottom: 12px; color: #111; letter-spacing: -1px; }
+        .magazine-subtitle { 
+            text-align: center; font-family: "Roboto"; font-size: 19px; color: #666; 
+            margin-bottom: 38px; border-bottom: 1px solid #111; padding-bottom: 22px; letter-spacing: 2px; 
+            display: block; min-height: 1em;
+        }
+        .magazine-hero-image { width: 100%; height: auto; margin-bottom: 10px; display: none; border-radius: 3px; }
+        .magazine-image-caption { text-align: right; font-size: 12px; color: #999; margin-bottom: 40px; display: block; min-height: 1.4em; }
+        
+        /* 🌟 排版模式 */
+        /* 杂志模式 (默认) */
+        .magazine-content { column-count: 2; column-gap: 30px; color: #222; text-align: justify; width: 100%; }
+        /* 诗歌模式 */
+        .layout-poetry .magazine-content { column-count: 1; text-align: center; max-width: 80%; margin: 0 auto; line-height: 2; }
+        /* 🌟 修复：小说模式 */
+        .layout-novel .magazine-content { column-count: 1; text-align: justify; line-height: 1.8; }
+
+        .fs-small { font-size: 15px; line-height: 1.6; } .fs-medium { font-size: 17px; line-height: 1.7; } .fs-large { font-size: 19px; line-height: 1.75; }
+        .fw-light { font-weight: 300; } .fw-regular { font-weight: 400; } .fw-medium { font-weight: 500; }
+        .magazine-content strong { font-weight: 900; color: #000; }
+        .magazine-content u { text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 5px; text-decoration-color: #d1d1d1; }
+        .magazine-content hr { border: 0; border-top: 2px solid #333; width: 40%; margin: 2.5em auto; break-inside: avoid; }
+        .magazine-content blockquote { margin: 1.8em 0; padding: 15px 20px; background: rgba(0,0,0,0.03); border-left: 2px solid #ccc; font-size: 1.1em; break-inside: avoid; font-style: normal; text-align: left; }
+        .magazine-content blockquote::before { content: "“"; color: #999; margin-right: 4px; }
+        .magazine-content blockquote::after { content: "”"; color: #999; margin-left: 4px; }
+        .magazine-content > blockquote:first-child { margin-top: 0; }
+        .magazine-content h3 { font-size: 1.15em; font-weight: 900; margin-top: 1.8em; margin-bottom: 0.6em; break-after: avoid; }
+        .magazine-content > h3:first-child { margin-top: 0; }
+        .magazine-content p { margin-bottom: 1.2em; margin-top: 0; }
+
+        .magazine-date { margin-top: 40px; text-align: right; font-size: 14px; color: #999; font-family: "Roboto", sans-serif; letter-spacing: 1px; }
+
+    </style>
+</head>
+<body class="mode-edit">
+
+    <!-- 左下角品牌水印 -->
+    <div class="brand-watermark">
+        <span>ZINEBO</span> v3.5
+    </div>
+
+    <div class="save-modal" id="saveModal">
+        <div class="save-modal-close" onclick="closeModal()">×</div>
+        <img id="generatedImage" src="" alt="Generated Poster">
+        <div class="save-modal-tip">👆 长按图片，选择“保存到照片”</div>
+    </div>
+
+    <div class="preview-panel" id="previewPanel">
+        <div class="preview-center-wrapper">
+            <div class="paper font-sans" id="capture-area">
+                <h1 class="magazine-title" id="outputTitle">ZINEBO</h1>
+                <div class="magazine-subtitle" id="outputAuthor"></div>
+                <img id="outputImage" class="magazine-hero-image" src="" alt="Hero Image">
+                <div id="outputImageCaption" class="magazine-image-caption"></div>
+                <div class="magazine-content fs-large fw-regular" id="outputBody"></div>
+                <div class="magazine-date" id="outputDate"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="editor-panel">
+        
+        <div class="editor-tabs">
+            <div class="editor-tab-btn active" onclick="switchCard('content', this)">内容</div>
+            <div class="editor-tab-btn" onclick="switchCard('style', this)">风格</div>
+            <div class="editor-tab-btn" onclick="switchCard('export', this)">导出</div>
+        </div>
+
+        <div id="card-content" class="control-card active-card">
+            <div class="row-group">
+                <div class="input-group"><label>主标题</label><input type="text" id="inputTitle" value="ZINEBO v3.5"></div>
+                <div class="input-group"><label>作者署名</label><input type="text" id="inputAuthor" placeholder="署名（选填）"></div>
+            </div>
+            <div class="row-group">
+                <div class="input-group"><label>主题图片</label><input type="file" id="inputImage" accept="image/*"></div>
+                <div class="input-group"><label>图片来源</label><input type="text" id="inputCaption" placeholder="图片来源"></div>
+            </div>
+            <div class="input-group flex-grow-input">
+                <label>
+                    <span>正文内容</span>
+                    <div class="label-controls">
+                        <div class="size-adjuster">
+                            <div class="size-adjust-btn" onclick="adjustEditorSize(-1)" title="减小字号">-</div>
+                            <div style="font-size:12px; color:#95a5a6; font-weight:bold; padding:0 4px;">A</div>
+                            <div class="size-adjust-btn" onclick="adjustEditorSize(1)" title="增大字号">+</div>
+                        </div>
+                        <span class="tips-trigger">
+                            <span class="tips-icon">?</span> 语法支持
+                        </span>
+                        <div class="markdown-tips-box">
+                            <code>**粗体**</code> <strong>加粗</strong><br><code>__下划线__</code> <u>下划线</u><br><code>&gt; 引言</code> 引用段落<br><code>## 标题</code> 小标题<br><code>---</code> 分割线
+                        </div>
+                    </div>
+                </label>
+                <textarea id="inputBody" class="ts-medium"></textarea>
+            </div>
+        </div>
+
+        <div id="card-style" class="control-card">
+            <div class="input-group"><label>排版模式</label>
+                <div class="radio-group" id="layoutGroup">
+                    <div class="radio-btn active" onclick="setLayout('magazine', this)">📰 杂志</div>
+                    <!-- 🌟 修复：找回“小说”模式按钮 -->
+                    <div class="radio-btn" onclick="setLayout('novel', this)">📖 小说</div>
+                    <div class="radio-btn" onclick="setLayout('poetry', this)">📜 诗歌</div>
+                </div>
+            </div>
+            <div class="input-group"><label>背景颜色</label>
+                <div class="color-options" id="colorPicker">
+                    <div class="color-btn active" style="background-color: #ffffff;" data-color="#ffffff" onclick="saveColor(this)"></div>
+                    <div class="color-btn" style="background-color: #f2efe9;" data-color="#f2efe9" onclick="saveColor(this)"></div>
+                    <div class="color-btn" style="background-color: #eaebed;" data-color="#eaebed" onclick="saveColor(this)"></div>
+                    <div class="color-btn" style="background-color: #e3f2fd;" data-color="#e3f2fd" onclick="saveColor(this)"></div>
+                    <div class="color-btn" style="background-color: #fce4ec;" data-color="#fce4ec" onclick="saveColor(this)"></div>
+                </div>
+            </div>
+            <div class="input-group"><label>纸张纹理</label>
+                <div class="radio-group" id="textureGroup">
+                    <div class="radio-btn active" onclick="setTexture('none', this)">无</div>
+                    <div class="radio-btn" onclick="setTexture('line', this)">横线</div>
+                    <div class="radio-btn" onclick="setTexture('grid', this)">细方格</div>
+                </div>
+            </div>
+            <div class="input-group"><label>字体风格</label>
+                <div class="radio-group" id="fontGroup">
+                    <div class="radio-btn active" onclick="setFont('sans', this)">思源黑体</div>
+                    <div class="radio-btn" onclick="setFont('serif', this)">思源宋体</div>
+                </div>
+            </div>
+            <div class="input-group"><label>正文字重</label>
+                <div class="radio-group" id="weightGroup">
+                    <div class="radio-btn" onclick="setWeight('light', this)">Light</div>
+                    <div class="radio-btn active" onclick="setWeight('regular', this)">Regular</div>
+                    <div class="radio-btn" onclick="setWeight('medium', this)">Medium</div>
+                </div>
+            </div>
+            <div class="input-group"><label>海报字号</label>
+                <div class="size-options" id="sizeGroup">
+                    <button class="size-btn" data-size="small" onclick="setFontSize('small', this)">A</button>
+                    <button class="size-btn" data-size="medium" onclick="setFontSize('medium', this)">A</button>
+                    <button class="size-btn active" data-size="large" onclick="setFontSize('large', this)">A</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="card-export" class="control-card">
+            <div id="mobile-preview-container"></div>
+            <div style="text-align: center; padding: 20px; color: var(--text-gray); font-size: 14px;">
+                <p>预览满意后，点击下方按钮生成图片。</p>
+                <p class="mobile-only-text" style="opacity: 0.7; font-size: 12px; margin-top: 8px;">(生成后请长按图片保存)</p>
+            </div>
+            <div class="btn-group">
+                <button class="btn-download" id="btnDownload" onclick="downloadImage()">📸 生成高清图片</button>
+            </div>
+            <div class="reset-section">
+                <button class="btn-reset-text" onclick="resetData()">🗑️ 清空所有内容并重置</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const paper = document.getElementById('capture-area');
+        const previewPanel = document.getElementById('previewPanel');
+        const wrapper = document.querySelector('.preview-center-wrapper');
+        const outputBody = document.getElementById('outputBody');
+        const saveModal = document.getElementById('saveModal');
+        const generatedImage = document.getElementById('generatedImage');
+        const btnDownload = document.getElementById('btnDownload');
+        const mobilePreviewContainer = document.getElementById('mobile-preview-container');
+        const inputBody = document.getElementById('inputBody');
+        const inputTitle = document.getElementById('inputTitle');
+        const inputAuthor = document.getElementById('inputAuthor');
+        const inputCaption = document.getElementById('inputCaption');
+
+        const defaultState = {
+            title: "ZINEBO v3.5",
+            author: "", 
+            caption: "图片来源",
+            body: `> ZINEBO v3.5 修复版
+
+## 小说模式回归
+我们修复了在“风格”卡片中遗失的 **“📖 小说”** 选项。
+现在您可以自由切换三种排版：
+1. **📰 杂志**：双栏紧凑。
+2. **📖 小说**：单栏两端对齐，适合长文。
+3. **📜 诗歌**：单栏居中，意境优美。
+
+所有功能均已就绪。`,
+            bgColor: "#ffffff", texture: "none", font: "sans", weight: "regular",
+            posterSize: "large", layout: "magazine", editorSizeIndex: 1
+        };
+
+        let currentState = { ...defaultState };
+        let editorSizeIndex = 1;
+        const editorSizes = ['ts-small', 'ts-medium', 'ts-large'];
+
+        function saveState() {
+            currentState.title = inputTitle.value;
+            currentState.author = inputAuthor.value;
+            currentState.caption = inputCaption.value;
+            currentState.body = inputBody.value;
+            localStorage.setItem('zinebo_data', JSON.stringify(currentState));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('zinebo_data');
+            if (saved) {
+                try { currentState = JSON.parse(saved); } catch (e) { currentState = { ...defaultState }; }
+            }
+            applyState();
+        }
+
+        function resetData() {
+            if(confirm("确定要清空所有内容并恢复默认设置吗？")) {
+                localStorage.removeItem('zinebo_data');
+                currentState = { ...defaultState };
+                applyState();
+                document.getElementById('outputImage').style.display = 'none';
+                document.getElementById('inputImage').value = '';
+                checkCaption();
+            }
+        }
+
+        function applyState() {
+            inputTitle.value = currentState.title;
+            inputAuthor.value = currentState.author;
+            inputCaption.value = currentState.caption;
+            inputBody.value = currentState.body;
+
+            updateUI('#colorPicker .color-btn', 'data-color', currentState.bgColor);
+            paper.style.backgroundColor = currentState.bgColor;
+
+            updateUI('#textureGroup .radio-btn', 'onclick', currentState.texture);
+            paper.classList.remove('texture-line', 'texture-grid');
+            if(currentState.texture !== 'none') paper.classList.add('texture-' + currentState.texture);
+
+            updateUI('#fontGroup .radio-btn', 'onclick', currentState.font);
+            paper.classList.remove('font-sans', 'font-serif'); paper.classList.add('font-' + currentState.font);
+
+            updateUI('#weightGroup .radio-btn', 'onclick', currentState.weight);
+            outputBody.classList.remove('fw-light', 'fw-regular', 'fw-medium'); outputBody.classList.add('fw-' + currentState.weight);
+
+            updateUI('#sizeGroup .size-btn', 'data-size', currentState.posterSize);
+            outputBody.classList.remove('fs-small', 'fs-medium', 'fs-large'); outputBody.classList.add('fs-' + currentState.posterSize);
+
+            updateUI('#layoutGroup .radio-btn', 'onclick', currentState.layout);
+            paper.classList.remove('layout-magazine', 'layout-poetry', 'layout-novel'); 
+            paper.classList.add('layout-' + currentState.layout);
+
+            editorSizeIndex = currentState.editorSizeIndex;
+            inputBody.classList.remove('ts-small', 'ts-medium', 'ts-large');
+            inputBody.classList.add(editorSizes[editorSizeIndex]);
+
+            render();
+            checkCaption();
+        }
+
+        function updateUI(selector, attr, value) {
+            document.querySelectorAll(selector).forEach(btn => {
+                btn.classList.remove('active');
+                if(btn.getAttribute(attr).includes(value)) btn.classList.add('active');
+            });
+        }
+
+        function adjustEditorSize(direction) {
+            editorSizeIndex += direction;
+            if(editorSizeIndex < 0) editorSizeIndex = 0;
+            if(editorSizeIndex > 2) editorSizeIndex = 2;
+            inputBody.classList.remove('ts-small', 'ts-medium', 'ts-large');
+            inputBody.classList.add(editorSizes[editorSizeIndex]);
+            currentState.editorSizeIndex = editorSizeIndex;
+            saveState();
+        }
+
+        function toggleTips() {
+            const box = document.getElementById('markdownTips');
+            box.style.display = (box.style.display === 'block') ? 'none' : 'block';
+        }
+
+        document.getElementById('outputDate').textContent = new Date().toISOString().split('T')[0];
+        loadState();
+        setTimeout(autoScale, 100);
+
+        function autoScale() {
+            if (window.getComputedStyle(previewPanel).display === 'none') return;
+            const containerW = previewPanel.offsetWidth;
+            const paperW = 675; 
+            const padding = 40; 
+            const scale = Math.min((containerW - padding) / paperW, 1);
+            
+            paper.style.transform = `scale(${scale})`;
+            const currentH = paper.offsetHeight;
+            paper.style.marginBottom = `-${currentH * (1 - scale)}px`;
+            
+            const visualHeight = currentH * scale;
+            const containerH = previewPanel.offsetHeight;
+            
+            if (visualHeight > containerH - padding) {
+                wrapper.style.justifyContent = 'flex-start';
+                paper.style.marginTop = '20px';
+            } else {
+                wrapper.style.justifyContent = 'center';
+                paper.style.marginTop = '0';
+            }
+        }
+
+        const resizeObserver = new ResizeObserver(() => { autoScale(); });
+        resizeObserver.observe(paper);
+        window.addEventListener('resize', autoScale);
+
+        function switchCard(cardName, btn) {
+            document.querySelectorAll('.editor-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.control-card').forEach(c => c.classList.remove('active-card'));
+            document.getElementById('card-' + cardName).classList.add('active-card');
+
+            if (window.innerWidth <= 1000) {
+                if (cardName === 'export') {
+                    paper.style.transform = 'none';
+                    mobilePreviewContainer.appendChild(paper);
+                    const mScale = (mobilePreviewContainer.offsetWidth - 20) / 675;
+                    paper.style.transform = `scale(${mScale})`;
+                    paper.style.transformOrigin = 'top center'; 
+                    paper.style.position = 'relative'; 
+                    paper.style.left = 'auto'; paper.style.top = 'auto'; paper.style.margin = '0 auto'; 
+                    paper.style.marginBottom = `-${(paper.offsetHeight * (1 - mScale)) / 2}px`;
+                    paper.style.marginTop = `-${(paper.offsetHeight * (1 - mScale)) / 2}px`;
+                }
+            } else {
+                if (!wrapper.contains(paper)) {
+                    paper.style.position = 'relative'; 
+                    wrapper.appendChild(paper);
+                    autoScale();
+                }
+            }
+        }
+
+        function render() {
+            document.getElementById('outputTitle').textContent = document.getElementById('inputTitle').value;
+            // 结构锁定：不隐藏
+            document.getElementById('outputAuthor').textContent = inputAuthor.value;
+            
+            let html = '';
+            inputBody.value.split('\n').forEach(line => {
+                let t = line.trim();
+                if(!t) return;
+                if(t==='---') html+=`<hr>`;
+                else if(t.startsWith('## ')) html+=`<h3>${t.substring(3)}</h3>`;
+                else if(t.startsWith('# ')) html+=`<h3>${t.substring(2)}</h3>`;
+                else if(t.startsWith('> ')) html+=`<blockquote>${parseMD(t.substring(1))}</blockquote>`;
+                else html+=`<p>${parseMD(t)}</p>`;
+            });
+            outputBody.innerHTML = html;
+        }
+
+        function parseMD(str) {
+            return str.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/__(.*?)__/g, '<u>$1</u>');
+        }
+
+        inputTitle.addEventListener('input', () => { render(); saveState(); });
+        inputAuthor.addEventListener('input', () => { render(); saveState(); });
+        inputBody.addEventListener('input', () => { render(); saveState(); });
+        inputCaption.addEventListener('input', () => { 
+            document.getElementById('outputImageCaption').textContent = inputCaption.value;
+            checkCaption();
+            saveState(); 
+        });
+
+        document.getElementById('inputImage').addEventListener('change', function(e) {
+            const f = e.target.files[0];
+            if(f) {
+                const r = new FileReader();
+                r.onload = (evt) => {
+                    document.getElementById('outputImage').src = evt.target.result;
+                    document.getElementById('outputImage').style.display = 'block';
+                    document.getElementById('outputImageCaption').style.display = 'block';
+                    autoScale();
+                };
+                r.readAsDataURL(f);
+            }
+        });
+        function checkCaption() {
+            const hasCap = inputCaption.value.trim() !== '';
+            document.getElementById('outputImageCaption').style.display = (hasCap) ? 'block' : 'none';
+        }
+
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                paper.style.backgroundColor = btn.getAttribute('data-color');
+            });
+        });
+        function setTexture(type, btn) {
+            const group = btn.parentNode; Array.from(group.children).forEach(c => c.classList.remove('active')); btn.classList.add('active');
+            paper.classList.remove('texture-line', 'texture-grid');
+            if (type !== 'none') paper.classList.add('texture-' + type);
+            currentState.texture = type; saveState();
+        }
+        function setFont(type, btn) {
+            const group = btn.parentNode; Array.from(group.children).forEach(c => c.classList.remove('active')); btn.classList.add('active');
+            paper.classList.remove('font-sans', 'font-serif'); paper.classList.add('font-' + type);
+            currentState.font = type; saveState();
+        }
+        function setWeight(w, btn) {
+            const group = btn.parentNode; Array.from(group.children).forEach(c => c.classList.remove('active')); btn.classList.add('active');
+            outputBody.classList.remove('fw-light', 'fw-regular', 'fw-medium'); outputBody.classList.add('fw-' + w);
+            currentState.weight = w; saveState();
+        }
+        function setFontSize(s, btn) {
+            const group = btn.parentNode; Array.from(group.children).forEach(c => c.classList.remove('active')); btn.classList.add('active');
+            outputBody.classList.remove('fs-small', 'fs-medium', 'fs-large'); outputBody.classList.add('fs-' + s);
+            currentState.posterSize = s; saveState();
+        }
+        function setLayout(mode, btn) {
+            const group = btn.parentNode; Array.from(group.children).forEach(c => c.classList.remove('active')); btn.classList.add('active');
+            paper.classList.remove('layout-magazine', 'layout-poetry', 'layout-novel'); 
+            paper.classList.add('layout-' + mode);
+            currentState.layout = mode; saveState();
+        }
+
+        function downloadImage() {
+            const originalText = btnDownload.innerText;
+            btnDownload.innerText = "⏳ 正在渲染...";
+            btnDownload.disabled = true;
+
+            const originalTransform = paper.style.transform;
+            const originalPos = paper.style.position;
+
+            const cloneContainer = document.createElement('div');
+            cloneContainer.style.position = 'fixed'; cloneContainer.style.top = '-9999px'; cloneContainer.style.left = '0'; cloneContainer.style.zIndex = '-1';
+            document.body.appendChild(cloneContainer);
+
+            paper.style.transform = 'none';
+            paper.style.position = 'static'; 
+            const clone = paper.cloneNode(true);
+            
+            paper.style.transform = originalTransform;
+            paper.style.position = originalPos;
+
+            clone.style.transform = 'none';
+            clone.style.margin = '0';
+            clone.style.width = '675px'; clone.style.minWidth = '675px';
+            cloneContainer.appendChild(clone);
+
+            const isMobile = window.innerWidth <= 1000 || 'ontouchstart' in window;
+
+            setTimeout(() => {
+                html2canvas(clone, {
+                    scale: 2, useCORS: true,
+                    backgroundColor: paper.style.backgroundColor || '#fff',
+                    logging: false,
+                    windowWidth: 1920 
+                }).then(canvas => {
+                    const imgData = canvas.toDataURL("image/png");
+                    const fileName = `poster-${getFormattedDate()}.png`;
+
+                    if (isMobile) {
+                        generatedImage.src = imgData;
+                        saveModal.classList.add('active');
+                    } else {
+                        const link = document.createElement('a');
+                        link.download = fileName;
+                        link.href = imgData;
+                        link.click();
+                    }
+                    
+                    document.body.removeChild(cloneContainer);
+                    btnDownload.innerText = originalText; btnDownload.disabled = false;
+                }).catch(err => {
+                    alert("生成失败: " + err);
+                    if(document.body.contains(cloneContainer)) document.body.removeChild(cloneContainer);
+                    btnDownload.innerText = originalText; btnDownload.disabled = false;
+                });
+            }, 300);
+        }
+
+        function getFormattedDate() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        }
+
+        function closeModal() { saveModal.classList.remove('active'); }
+    </script>
+</body>
+</html>
